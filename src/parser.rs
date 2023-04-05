@@ -14,7 +14,7 @@ use crate::tokenizer::Token::Number;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     t: String,
-    body:  Vec<Statement>,
+    body: Vec<Statement>,
 }
 
 impl Program {
@@ -61,7 +61,7 @@ struct BlockStatement {
 }
 
 impl BlockStatement {
-    fn new() -> Self{
+    fn new() -> Self {
         Self {
             t: String::from("BlockStatement"),
             body: Vec::new(),
@@ -72,8 +72,6 @@ impl BlockStatement {
         self.body.push(stmt);
     }
 }
-
-
 
 
 /**
@@ -147,7 +145,7 @@ impl<'a> Parser<'a> {
         let mut body = Vec::<Statement>::new();
         let stmt = self.statement()?;
         body.push(stmt);
-        while self.lookahead != Token::EOF && self.lookahead != stop_lookahead{
+        while self.lookahead != Token::EOF && self.lookahead != stop_lookahead {
             let stmt = self.statement()?;
             body.push(stmt)
         }
@@ -157,9 +155,9 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Statement, String> {
         match self.lookahead {
             Token::OpenBrace => self.block(),
-            _ => match self.expression() {
-                Ok(exp) => Ok(Statement::Expression(Box::new(exp))),
-                Err(e) => Err(e)
+            _ => {
+                let exp = self.expression()?;
+                Ok(Statement::Expression(Box::new(exp)))
             }
         }
     }
@@ -177,7 +175,7 @@ impl<'a> Parser<'a> {
             Token::CloseBrace => Statement::Blank(Box::new(Blank {})),
             _ => {
                 let stmts = self.statement_list(Token::CloseBrace)?;
-                let mut bs  = BlockStatement::new();
+                let mut bs = BlockStatement::new();
                 bs.body = stmts;
                 Statement::Block(Box::new(bs))
             }
