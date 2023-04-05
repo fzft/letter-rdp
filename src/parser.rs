@@ -5,26 +5,24 @@ use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+use serde::de::Unexpected::Option;
 
+use crate::parser::Literal::{NumberLiteral, StringLiteral};
 use crate::tokenizer::{Token, Tokenizer};
 use crate::tokenizer::Token::Number;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
-    p_type: String,
-    body: Vec<Literal>,
+    t: String,
+    body:  Vec<Statement>,
 }
 
 impl Program {
     fn new() -> Self {
         Self {
-            p_type: String::from("program"),
+            t: String::from("program"),
             body: Vec::new(),
         }
-    }
-
-    fn push(&mut self, l: Literal) {
-        self.body.push(l)
     }
 }
 
@@ -35,24 +33,82 @@ impl Display for Program {
     }
 }
 
+/**
+ *Statement
+ *  : ExpressionStatement
+ *  | BlockStatement
+ *  ;
+ */
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Literal {
-    t_literal: String,
-    value: String,
+enum Statement {
+    Expression(Box<ExpressionStatement>),
+    Block(Box<BlockStatement>),
+    Blank(Box<Blank>),
 }
 
-impl Literal {
-    fn new(t_literal: String, value: String) -> Self {
+#[derive(Serialize, Deserialize, Debug)]
+struct Blank {}
+
+/**
+ * BlockStatement
+ * : '{' OptStatement '}'
+ * ;
+ */
+#[derive(Serialize, Deserialize, Debug)]
+struct BlockStatement {
+    t: String,
+    body: Vec<Statement>,
+}
+
+impl BlockStatement {
+    fn new() -> Self{
         Self {
-            t_literal,
-            value,
+            t: String::from("BlockStatement"),
+            body: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, stmt: Statement) {
+        self.body.push(stmt);
+    }
+}
+
+
+
+
+/**
+ *  ExpressionStatement
+ *  | Expression
+ *  ;
+ */
+#[derive(Serialize, Deserialize, Debug)]
+struct ExpressionStatement {
+    t: String,
+    expression: Literal,
+}
+
+impl ExpressionStatement {
+    fn new(expression: Literal) -> Self {
+        Self {
+            t: String::from("ExpressionStatement"),
+            expression,
         }
     }
 }
 
+
+#[derive(Serialize, Deserialize, Debug)]
+enum Literal {
+    StringLiteral(String),
+    NumberLiteral(String),
+    None,
+}
+
+
 pub struct Parser<'a> {
     input: &'a str,
     tokenizer: Tokenizer<'a>,
+    lookahead: Token,
 }
 
 impl<'a> Parser<'a> {
@@ -60,57 +116,98 @@ impl<'a> Parser<'a> {
         Self {
             input: "",
             tokenizer: Tokenizer::new(),
+            lookahead: Token::None,
         }
     }
 
     // Parses a string into an AST
-    pub fn parse(&mut self, input: &'a str) -> Program {
+    pub fn parse(&mut self, input: &'a str) -> Result<Program, String> {
         self.input = input;
         self.tokenizer.init(input);
 
         // Prime the tokenizer to obtain the first
         // token which is our lookahead. the lookahead is
         // used for predictive parsing
+        self.lookahead = self.tokenizer.next().unwrap();
 
         // Parse recursively starting from the main
         // entry point, the Program.
         self.program()
     }
 
-    // fn statement_list(&mut self) -> Vec<Statement> {
-    //     let mut statement_list = Vec::<Statement>::new();
-    //     while self.lookahead != None {
-    //         statement_list.push(Statement {})
-    //     }
-    //     return statement_list;
-    // }
-
-    fn program(&mut self) -> Program {
+    fn program(&mut self) -> Result<Program, String> {
+        let body = self.statement_list(Token::None)?;
         let mut p = Program::new();
-
-        loop {
-            let lookahead = self.tokenizer.next();
-            match lookahead {
-                Some(Token::Number(num)) => {
-                    p.push(Literal::new(String::from("Number"), num))
-                }
-                Some(Token::StringLiteral(s)) =>
-                    p.push(Literal::new(String::from("String"), s)),
-                Some(Token::EOF) => break,
-                Some(Token::Unknown(ch)) => {
-                    // Handle unexpected characters, e.g., print a warning or ignore them
-                    println!("Warning: Unexpected character '{}'", ch);
-                    continue;
-                }
-                _ => { }
-            }
-        }
-        p
+        p.body = body;
+        Ok(p)
     }
 
+
+    fn statement_list(&mut self, stop_lookahead: Token) -> Result<Vec<Statement>, String> {
+        let mut body = Vec::<Statement>::new();
+        let stmt = self.statement()?;
+        body.push(stmt);
+        while self.lookahead != Token::EOF && self.lookahead != stop_lookahead{
+            let stmt = self.statement()?;
+            body.push(stmt)
+        }
+        Ok(body)
+    }
+
+    fn statement(&mut self) -> Result<Statement, String> {
+        match self.lookahead {
+            Token::OpenBrace => self.block(),
+            _ => match self.expression() {
+                Ok(exp) => Ok(Statement::Expression(Box::new(exp))),
+                Err(e) => Err(e)
+            }
+        }
+    }
+
+    fn expression(&mut self) -> Result<ExpressionStatement, String> {
+        let expression = self.literal()?;
+        self.eat(&Token::Semicolon)?;
+        Ok(ExpressionStatement::new(expression))
+    }
+
+    fn block(&mut self) -> Result<Statement, String> {
+        self.eat(&Token::OpenBrace)?;
+
+        let body = match self.lookahead {
+            Token::CloseBrace => Statement::Blank(Box::new(Blank {})),
+            _ => {
+                let stmts = self.statement_list(Token::CloseBrace)?;
+                let mut bs  = BlockStatement::new();
+                bs.body = stmts;
+                Statement::Block(Box::new(bs))
+            }
+        };
+        self.eat(&Token::CloseBrace)?;
+        Ok(body)
+    }
+
+
+    fn literal(&mut self) -> Result<Literal, String> {
+        let token = self.lookahead.clone();
+        self.lookahead = self.tokenizer.next().unwrap_or_else(|| Token::EOF);
+        match token {
+            Token::Number(num) => Ok(NumberLiteral(num)),
+            Token::StringLiteral(s) => Ok(StringLiteral(s)),
+            _ => Err(format!("Unexpected token, expected Literal"))
+        }
+    }
+
+
     // Expects a token of a given type
-    fn eat(&mut self, expected: &Token, actual: &Token) -> bool {
-        expected == actual
+    fn eat(&mut self, expected: &Token) -> Result<Token, String> {
+        // let actual = self.tokenizer.next().ok_or_else(|| format!("Unexpected end of input, expected: {:?}", expected))?;
+        let actual = &self.lookahead;
+        if actual == expected {
+            self.lookahead = self.tokenizer.next().unwrap_or_else(|| Token::EOF);
+            Ok(expected.clone())
+        } else {
+            Err(format!("Unexpected token: {:?}, expected: {:?}", actual, expected))
+        }
     }
 }
 

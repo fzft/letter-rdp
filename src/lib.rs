@@ -5,6 +5,8 @@ pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use crate::parser::Parser;
@@ -19,7 +21,7 @@ mod tests {
 
     #[test]
     fn test_number() {
-        let num = " 11 ";
+        let num = " 11;";
         let mut p = Parser::new();
         let _ast = p.parse(num);
         // assert_eq!(ast, Number(11 as f64))
@@ -27,7 +29,7 @@ mod tests {
 
     #[test]
     fn test_unexpected() {
-        let str = "\"hello\"";
+        let str = "\"hello\";";
         let mut p = Parser::new();
         let _ast = p.parse(str);
         // assert_eq!(ast, StringLiteral(String::from("hello")))
@@ -35,7 +37,7 @@ mod tests {
 
     #[test]
     fn test_white_space() {
-        let str = " \"hello\"      ";
+        let str = " \"hello\";      ";
         let mut p = Parser::new();
         let _ast = p.parse(str);
         // assert_eq!(ast, StringLiteral(String::from("hello")))
@@ -45,7 +47,7 @@ mod tests {
     fn test_skip_single_line_comments() {
         let str = " \
         // String
-        \"hello\"      \
+        \"hello\";      \
         ";
         let mut p = Parser::new();
         let _ast = p.parse(str);
@@ -58,7 +60,7 @@ mod tests {
         /**
          *  123
          */
-        \"hello\"      \
+        \"hello\";      \
         ";
         let mut p = Parser::new();
         let _ast = p.parse(str);
@@ -72,6 +74,29 @@ mod tests {
            \"world\";                     \
         ";
 
+        let ast = Parser::new().parse(program).unwrap();
+        println!("{:?}", ast)
+    }
+
+    #[test]
+    fn omit_semicolon() {
+        let program = "\"hello\"  \
+           42;                \
+           \"world\";                     \
+        ";
+        let ast = Parser::new().parse(program);
+        assert!(ast.is_err(), "expect a semicolon")
+    }
+
+    #[test]
+    fn with_block() {
+        let program = "     \
+          {               \
+           42;         \
+                          \
+           \"hello\";          \
+               }     \
+        ";
         let ast = Parser::new().parse(program);
         println!("{:?}", ast)
     }

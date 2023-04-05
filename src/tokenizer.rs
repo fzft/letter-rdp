@@ -27,6 +27,9 @@ pub enum Token {
     EOF,
 
     Unknown(char), // Add this line
+
+    OpenBrace,
+    CloseBrace
 }
 
 
@@ -66,6 +69,10 @@ lazy_static! {
         patterns.push((r"^\r", PatternBox::new(|_: &str| Token::None))); // return
         patterns.push((r"^\s+", PatternBox::new(|_: &str| Token::None))); // whitespace
         patterns.push((r"^/\*\*(.|\n)*?\*/", PatternBox::new(|_: &str| Token::None))); // multiple-line comments
+
+        patterns.push((r"^\{", PatternBox::new(|_: &str| Token::OpenBrace)));
+        patterns.push((r"^\}", PatternBox::new(|_: &str| Token::CloseBrace)));
+
 
          // String
         patterns.push((r#"^"([^"\\]|\\.)*""#, PatternBox::new(|s: &str| {
