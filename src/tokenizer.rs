@@ -1,7 +1,7 @@
 #![allow(unused)]
 
-use std::collections::HashMap;
 use std::{fmt, vec};
+use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::str::Chars;
 use std::sync::{Arc, Mutex};
@@ -18,9 +18,20 @@ pub enum Token {
     Multiply,
     Divide,
 
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    NotEqual,
+    DoubleEqual,
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot,
+
     StringLiteral(String),
 
     Semicolon,
+    Comma,
 
     // All skip token
     None,
@@ -29,7 +40,26 @@ pub enum Token {
     Unknown(char), // Add this line
 
     OpenBrace,
-    CloseBrace
+    CloseBrace,
+
+    OpenParen,
+    CloseParen,
+
+    SimpleAssign,
+    AddAssign,
+    MinusAssign,
+    MultiAssign,
+    DivAssign,
+
+    Identifier(String),
+
+    // Keywords:
+    Let,
+    If,
+    Else,
+    True,
+    False,
+    Null,
 }
 
 
@@ -56,12 +86,22 @@ lazy_static! {
         // Float
         patterns.push(((r"^\d+(\.\d+)?", PatternBox::new(|s: &str| Token::Number(s.to_string())))));
 
-        patterns.push((r"^;", PatternBox::new(|_: &str| Token::Semicolon)));
-        patterns.push((r"^\+", PatternBox::new(|_: &str| Token::Plus)));
-        patterns.push((r"^\-", PatternBox::new(|_: &str| Token::Minus)));
-        patterns.push((r"^\*", PatternBox::new(|_: &str| Token::Multiply)));
+        // Keywords
+        patterns.push((r"^\blet\b", PatternBox::new(|_: &str| Token::Let)));
+        patterns.push((r"^\bif\b", PatternBox::new(|_: &str| Token::If)));
+        patterns.push((r"^\belse\b", PatternBox::new(|_: &str| Token::Else)));
+        patterns.push((r"^\btrue\b", PatternBox::new(|_: &str| Token::True)));
+        patterns.push((r"^\bfalse\b", PatternBox::new(|_: &str| Token::False)));
+        patterns.push((r"^\bnull\b", PatternBox::new(|_: &str| Token::Null)));
 
-        // patterns.insert(r"^/", PatternBox::new(|_: &str| Token::Divide));
+        patterns.push((r"^\+=", PatternBox::new(|_: &str| Token::AddAssign)));
+        patterns.push((r"^\+", PatternBox::new(|_: &str| Token::Plus)));
+
+        patterns.push((r"^&&", PatternBox::new(|_: &str| Token::LogicalAnd)));
+        patterns.push((r"^\|\|", PatternBox::new(|_: &str| Token::LogicalOr)));
+        patterns.push((r"^!", PatternBox::new(|_: &str| Token::LogicalNot)));
+
+        patterns.push((r"^\w+", PatternBox::new(|s: &str| Token::Identifier(s.to_string()))));
 
           // Skip token
         patterns.push((r"^//.*", PatternBox::new(|_: &str| Token::None))); // single comments
@@ -72,6 +112,35 @@ lazy_static! {
 
         patterns.push((r"^\{", PatternBox::new(|_: &str| Token::OpenBrace)));
         patterns.push((r"^\}", PatternBox::new(|_: &str| Token::CloseBrace)));
+
+
+        patterns.push((r"^\(", PatternBox::new(|_: &str| Token::OpenParen)));
+        patterns.push((r"^\)", PatternBox::new(|_: &str| Token::CloseParen)));
+
+        patterns.push((r"^;", PatternBox::new(|_: &str| Token::Semicolon)));
+        patterns.push((r"^,", PatternBox::new(|_: &str| Token::Comma)));
+        patterns.push((r"^\-", PatternBox::new(|_: &str| Token::Minus)));
+
+        patterns.push((r">", PatternBox::new(|_: &str| Token::GreaterThan)));
+        patterns.push((r"<", PatternBox::new(|_: &str| Token::LessThan)));
+        patterns.push((r">=", PatternBox::new(|_: &str| Token::GreaterThanOrEqual)));
+        patterns.push((r"<=", PatternBox::new(|_: &str| Token::LessThan)));
+        patterns.push((r"!=", PatternBox::new(|_: &str| Token::NotEqual)));
+        patterns.push((r"==", PatternBox::new(|_: &str| Token::DoubleEqual)));
+
+
+
+
+        // Assign
+        patterns.push((r"\-=", PatternBox::new(|_: &str| Token::MinusAssign)));
+        patterns.push((r"\*=", PatternBox::new(|_: &str| Token::MultiAssign)));
+        patterns.push((r"^/=", PatternBox::new(|_: &str| Token::DivAssign)));
+
+        patterns.push((r"^=", PatternBox::new(|_: &str| Token::SimpleAssign)));
+
+        patterns.push((r"^/", PatternBox::new(|_: &str| Token::Divide)));
+        patterns.push((r"^\*", PatternBox::new(|_: &str| Token::Multiply)));
+
 
 
          // String
@@ -120,6 +189,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                     match token {
                         Token::None => break,
                         _ => {
+                            dbg!(token.clone());
                             return Some(token);
                         }
                     }
