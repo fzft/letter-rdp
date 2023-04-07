@@ -8,6 +8,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8b59c57a-c7d0-4933-ad29-44d1b48ee22b" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/tokenizer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tokenizer.rs" afterDir="false" />
@@ -56,9 +57,9 @@
     &quot;settings.editor.selected.configurable&quot;: &quot;language.rust.cargo.check&quot;
   }
 }</component>
-  <component name="RunManager" selected="Cargo.Test tests::it_worked">
-    <configuration name="Test tests::it_worked" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package letter-rdp --lib tests::it_worked -- --exact" />
+  <component name="RunManager" selected="Cargo.Test tests::func_call1">
+    <configuration name="Test tests::func_call1" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package letter-rdp --lib tests::func_call1 -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <option name="emulateTerminal" value="false" />
       <option name="channel" value="DEFAULT" />
@@ -74,8 +75,8 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test tests::test_number" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package letter-rdp --lib tests::test_number -- --exact" />
+    <configuration name="Test tests::member" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package letter-rdp --lib tests::member -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <option name="emulateTerminal" value="false" />
       <option name="channel" value="DEFAULT" />
@@ -91,8 +92,8 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test tests::test_skip_comments" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package letter-rdp --lib tests::test_skip_comments -- --exact" />
+    <configuration name="Test tests::member2" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package letter-rdp --lib tests::member2 -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <option name="emulateTerminal" value="false" />
       <option name="channel" value="DEFAULT" />
@@ -108,8 +109,8 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test tests::test_unexpected" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package letter-rdp --lib tests::test_unexpected -- --exact" />
+    <configuration name="Test tests::member3" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package letter-rdp --lib tests::member3 -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <option name="emulateTerminal" value="false" />
       <option name="channel" value="DEFAULT" />
@@ -125,8 +126,8 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test tests::test_white_space" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package letter-rdp --lib tests::test_white_space -- --exact" />
+    <configuration name="Test tests::member4" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package letter-rdp --lib tests::member4 -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <option name="emulateTerminal" value="false" />
       <option name="channel" value="DEFAULT" />
@@ -163,11 +164,11 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Cargo.Test tests::it_worked" />
-        <item itemvalue="Cargo.Test tests::test_skip_comments" />
-        <item itemvalue="Cargo.Test tests::test_number" />
-        <item itemvalue="Cargo.Test tests::test_white_space" />
-        <item itemvalue="Cargo.Test tests::test_unexpected" />
+        <item itemvalue="Cargo.Test tests::func_call1" />
+        <item itemvalue="Cargo.Test tests::member4" />
+        <item itemvalue="Cargo.Test tests::member2" />
+        <item itemvalue="Cargo.Test tests::member" />
+        <item itemvalue="Cargo.Test tests::member3" />
       </list>
     </recent_temporary>
   </component>

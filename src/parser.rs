@@ -9,9 +9,10 @@ use std::path::StripPrefixError;
 use serde::{Deserialize, Serialize};
 use serde::de::Unexpected::Option;
 
+use crate::parser::Expression::CallExpression;
 use crate::parser::Literal::{BoolLiteral, NullLiteral, NumberLiteral, StringLiteral};
 use crate::tokenizer::{Token, Tokenizer};
-use crate::tokenizer::Token::Number;
+use crate::tokenizer::Token::{Number, While};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
@@ -48,6 +49,63 @@ enum Statement {
     Empty(Box<Empty>),
     Variable(Box<VariableStatement>),
     If(Box<IfStatement>),
+    Iteration(IterationStatement),
+    Def(Box<FunctionDeclaration>),
+    Return(ReturnStatement),
+    Class(Box<ClassDeclaration>),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ClassDeclaration {
+    t: String,
+    id: Expression,
+    super_clz: Expression,
+    body: Statement,
+}
+
+impl ClassDeclaration {
+    fn new(id: Expression, super_clz: Expression, body: Statement) -> Self {
+        Self {
+            t: String::from("ClassDeclaration"),
+            id,
+            super_clz,
+            body,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct FunctionDeclaration {
+    t: String,
+    name: Expression,
+    params: Vec<Expression>,
+    body: Statement,
+}
+
+impl FunctionDeclaration {
+    fn new(name: Expression, params: Vec<Expression>, body: Statement) -> Self {
+        Self {
+            t: String::from("FunctionDeclaration"),
+            name,
+            params,
+            body,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ReturnStatement {
+    t: String,
+    argument: Expression,
+}
+
+impl ReturnStatement {
+    fn new(argument: Expression) -> Self {
+        Self {
+            t: String::from("ReturnStatement"),
+            argument,
+        }
+    }
 }
 
 
@@ -106,6 +164,68 @@ impl VariableStatement {
 
     fn push(&mut self, v: Variable) {
         self.decls.push(v)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+enum IterationStatement {
+    While(Box<WhileStatement>),
+    DoWhile(Box<DoWhileStatement>),
+    For(Box<ForStatement>),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct WhileStatement {
+    t: String,
+    test: Expression,
+    body: Statement,
+}
+
+impl WhileStatement {
+    fn new(test: Expression, body: Statement) -> Self {
+        Self {
+            t: String::from("WhileStatement"),
+            test,
+            body,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DoWhileStatement {
+    t: String,
+    test: Expression,
+    body: Statement,
+}
+
+impl DoWhileStatement {
+    fn new(test: Expression, body: Statement) -> Self {
+        Self {
+            t: String::from("DoWhileStatement"),
+            test,
+            body,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ForStatement {
+    t: String,
+    init: Statement,
+    test: Expression,
+    update: Expression,
+    body: Statement,
+}
+
+impl ForStatement {
+    fn new(init: Statement, test: Expression, update: Expression, body: Statement) -> Self {
+        Self {
+            t: String::from("ForStatement"),
+            test,
+            update,
+            init,
+            body,
+        }
     }
 }
 
@@ -178,8 +298,93 @@ enum Expression {
     AssignExpression(Box<Assign>),
     LogicalExpression(Box<Logical>),
     UnaryExpression(Box<Unary>),
+    MemberExpression(Box<Member>),
     Ident(String),
+    CallExpression(Box<Call>),
+    ThisExpression(This),
+    SuperExpression(Super),
+    NewExpression(Box<New>),
     Blank,
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+struct New {
+    t: String,
+    callee: Expression,
+    args: Vec<Expression>,
+}
+
+impl New {
+    fn new(callee: Expression, args: Vec<Expression>) -> Self {
+        Self {
+            t: String::from("NewExpression"),
+            callee,
+            args,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct This {
+    t: String,
+}
+
+impl This {
+    fn new() -> Self {
+        Self {
+            t: String::from("ThisExpression")
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Super {
+    t: String,
+}
+
+impl Super {
+    fn new() -> Self {
+        Self {
+            t: String::from("Super")
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Call {
+    t: String,
+    callee: Expression,
+    arguments: Vec<Expression>,
+}
+
+impl Call {
+    fn new(callee: Expression, arguments: Vec<Expression>) -> Self {
+        Self {
+            t: String::from("CallExpression"),
+            callee,
+            arguments,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Member {
+    t: String,
+    computed: bool,
+    obj: Expression,
+    property: Expression,
+}
+
+impl Member {
+    fn new(computed: bool, obj: Expression, property: Expression) -> Self {
+        Self {
+            t: String::from("MemberExpression"),
+            obj,
+            computed,
+            property,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -323,14 +528,151 @@ impl<'a> Parser<'a> {
             Token::Semicolon => self.emp_stmt(),
             Token::If => self.if_stmt(),
             Token::Let => self.var_stmt(),
+            Token::While | Token::For | Token::Do => self.iter_stmt(),
+            Token::Def => self.func_decl(),
+            Token::Return => self.ret_stmt(),
+            Token::Class => self.clz_decl(),
             _ => self.expression_stmt()
         }
     }
-    fn var_stmt(&mut self) -> Result<Statement, String> {
+
+    fn clz_decl(&mut self) -> Result<Statement, String> {
+        self.eat(&[Token::Class], |_| false)?;
+        let id = self.ident()?;
+        let super_clz = if self.lookahead == Token::Extend {
+            self.clz_ext()?
+        } else {
+            Expression::Blank
+        };
+
+        let body = self.block()?;
+
+        Ok(Statement::Class(Box::new(ClassDeclaration::new(id, super_clz, body))))
+    }
+
+    fn clz_ext(&mut self) -> Result<Expression, String> {
+        self.eat(&[Token::Extend], |_| false)?;
+        self.ident()
+    }
+
+    fn ret_stmt(&mut self) -> Result<Statement, String> {
+        self.eat(&[Token::Return], |_| false)?;
+        let argument = if self.lookahead != Token::Semicolon {
+            self.expression()?
+        } else {
+            Expression::Blank
+        };
+        self.eat(&[Token::Semicolon], |_| false)?;
+        Ok(Statement::Return(ReturnStatement::new(argument)))
+    }
+
+    fn func_decl(&mut self) -> Result<Statement, String> {
+        self.eat(&[Token::Def], |_| false)?;
+        let name = self.ident()?;
+        self.eat(&[Token::OpenParen], |_| false)?;
+        let params = if self.lookahead != Token::CloseParen {
+            self.formal_param_lst()?
+        } else {
+            Vec::new()
+        };
+        self.eat(&[Token::CloseParen], |_| false)?;
+        let body = self.block()?;
+        Ok(Statement::Def(Box::new(FunctionDeclaration::new(name, params, body))))
+    }
+
+    fn formal_param_lst(&mut self) -> Result<Vec<Expression>, String> {
+        let mut params = Vec::<Expression>::new();
+        loop {
+            let ident = self.ident()?;
+            params.push(ident);
+
+            if self.lookahead != Token::Comma || self.eat(&[Token::Comma], |_| false).is_err() {
+                break;
+            }
+        }
+        Ok(params)
+    }
+
+    fn iter_stmt(&mut self) -> Result<Statement, String> {
+        match self.lookahead {
+            Token::Do => self.do_stmt(),
+            Token::While => self.while_stmt(),
+            Token::For => self.for_stmt(),
+            _ => Err(format!("Unexpected iter operator"))
+        }
+    }
+
+    fn do_stmt(&mut self) -> Result<Statement, String> {
+        self.eat(&[Token::Do], |_| false)?;
+        let body = self.stmt()?;
+        self.eat(&[Token::While], |_| false)?;
+        self.eat(&[Token::OpenParen], |_| false)?;
+        let test = self.expression()?;
+        self.eat(&[Token::CloseParen], |_| false)?;
+        self.eat(&[Token::Semicolon], |_| false)?;
+        Ok(Statement::Iteration(IterationStatement::DoWhile(Box::new(DoWhileStatement::new(test, body)))))
+    }
+
+    fn while_stmt(&mut self) -> Result<Statement, String> {
+        self.eat(&[Token::While], |_| false)?;
+        self.eat(&[Token::OpenParen], |_| false)?;
+        let test = self.expression()?;
+        self.eat(&[Token::CloseParen], |_| false)?;
+        let body = self.stmt()?;
+        Ok(Statement::Iteration(IterationStatement::While(Box::new(WhileStatement::new(test, body)))))
+    }
+    fn for_stmt(&mut self) -> Result<Statement, String> {
+        self.eat(&[Token::For], |_| false)?;
+        self.eat(&[Token::OpenParen], |_| false)?;
+        let init = if self.lookahead != Token::Semicolon {
+            self.for_init_stmt()?
+        } else {
+            Statement::Empty(Box::new(Empty::new()))
+        };
+        self.eat(&[Token::Semicolon], |_| false)?;
+
+        let test = if self.lookahead != Token::Semicolon {
+            self.expression()?
+        } else {
+            Expression::Blank
+        };
+        self.eat(&[Token::Semicolon], |_| false)?;
+        let update = if self.lookahead != Token::CloseParen {
+            self.expression()?
+        } else {
+            Expression::Blank
+        };
+        self.eat(&[Token::CloseParen], |_| false)?;
+        let body = self.stmt()?;
+
+        Ok(Statement::Iteration(IterationStatement::For(Box::new(ForStatement::new(init, test, update, body)))))
+    }
+
+    /**
+     * ForStatementInit
+     * : VariableStatementInit
+     * | Expression
+     */
+    fn for_init_stmt(&mut self) -> Result<Statement, String> {
+        match self.lookahead {
+            Token::Let => self.var_init_stmt(),
+            _ => {
+                let exp = self.expression()?;
+                Ok(Statement::Expression(Box::new(ExpressionStatement::new(exp))))
+            }
+        }
+    }
+
+    fn var_init_stmt(&mut self) -> Result<Statement, String> {
         self.eat(&[Token::Let], |_| false)?;
         let declarations = self.var_decl_lst()?;
-        self.eat(&[Token::Semicolon], |_| false)?;
         Ok(Statement::Variable(Box::new(declarations)))
+    }
+
+    fn var_stmt(&mut self) -> Result<Statement, String> {
+        let variable_stmt = self.var_init_stmt()?;
+        self.eat(&[Token::Semicolon], |_| false)?;
+        Ok(variable_stmt)
     }
 
     fn emp_stmt(&mut self) -> Result<Statement, String> {
@@ -518,6 +860,8 @@ impl<'a> Parser<'a> {
      * : Literal
      * | ParenthesizedExpression
      * | Ident
+     * | ThisExpression
+     * | NewExpression
      * :
      */
     fn primary_exp(&mut self) -> Result<Expression, String> {
@@ -526,16 +870,128 @@ impl<'a> Parser<'a> {
             return Ok(Expression::Literal(l));
         }
 
-        match self.lookahead {
+        return match self.lookahead {
             Token::OpenParen => self.paren_exp(),
             Token::Identifier(_) => self.ident(),
+            Token::This => self.this_exp(),
+            Token::New => self.new_exp(),
             _ => self.lhs_exp()
-        }
+        };
     }
 
+    fn new_exp(&mut self) -> Result<Expression, String> {
+        self.eat(&[Token::New], |_| false)?;
+        let callee = self.member_exp()?;
+        let args = self.args()?;
+        Ok(Expression::NewExpression(Box::new(New::new(callee, args))))
+    }
 
+    fn this_exp(&mut self) -> Result<Expression, String> {
+        self.eat(&[Token::This], |_| false)?;
+        Ok(Expression::ThisExpression(This::new()))
+    }
+
+    /**
+     * LeftHandSideExpression
+     * : CallMemberExpression
+     * :
+     */
     fn lhs_exp(&mut self) -> Result<Expression, String> {
-        self.primary_exp()
+        self.call_member_exp()
+    }
+
+    /**
+     * CallMemberExpression
+     * : MemberExpression
+     * : CallExpression
+     * :
+     */
+    fn call_member_exp(&mut self) -> Result<Expression, String> {
+        if self.lookahead == Token::Super {
+            let su = self.super_call()?;
+            return self.call_exp(su);
+        }
+        let member = self.member_exp()?;
+        if self.lookahead == Token::OpenParen {
+            return self.call_exp(member);
+        }
+
+        Ok(member)
+    }
+    /**
+     * Callee
+     * : MemberExpression
+     * | CallExpression
+     */
+    fn call_exp(&mut self, callee: Expression) -> Result<Expression, String> {
+        let mut arguments = self.args()?;
+        let mut call_exp = Expression::CallExpression(Box::new(Call::new(callee, arguments)));
+        if self.lookahead == Token::OpenParen {
+            call_exp = self.call_exp(call_exp)?;
+        }
+
+        Ok(call_exp)
+    }
+
+    fn super_call(&mut self) -> Result<Expression, String> {
+        self.eat(&[Token::Super], |_| false)?;
+        Ok(Expression::SuperExpression(Super::new()))
+    }
+
+    /**
+     * Arguments
+     *  : ('OptArgumentList')
+     *
+     */
+    fn args(&mut self) -> Result<Vec<Expression>, String> {
+        self.eat(&[Token::OpenParen], |_| false)?;
+        let arg_list = if self.lookahead != Token::CloseParen {
+            self.argument_lst()?
+        } else {
+            Vec::new()
+        };
+        self.eat(&[Token::CloseParen], |_| false)?;
+        Ok(arg_list)
+    }
+
+    fn argument_lst(&mut self) -> Result<Vec<Expression>, String> {
+        let mut argument_list = Vec::<Expression>::new();
+        loop {
+            let var = self.assign_exp()?;
+            argument_list.push(var);
+
+            if self.lookahead != Token::Comma || self.eat(&[Token::Comma], |_| false).is_err() {
+                break;
+            }
+        }
+        Ok(argument_list)
+    }
+
+    /**
+     * LeftHandSideExpression
+     * : PrimaryExpression
+     * : MemberExpression '.' Ident
+     * ; MemberExpression '['Expression']'
+     */
+    fn member_exp(&mut self) -> Result<Expression, String> {
+        let mut obj = self.primary_exp()?;
+        while self.lookahead == Token::Dot || self.lookahead == Token::OpenSqrBracket {
+            match self.lookahead {
+                Token::Dot => {
+                    self.eat(&[Token::Dot], |_| false)?;
+                    let property = self.ident()?;
+                    obj = Expression::MemberExpression(Box::new(Member::new(false, obj, property)));
+                }
+                Token::OpenSqrBracket => {
+                    self.eat(&[Token::OpenSqrBracket], |_| false)?;
+                    let property = self.expression()?;
+                    self.eat(&[Token::CloseSqrBracket], |_| false)?;
+                    obj = Expression::MemberExpression(Box::new(Member::new(true, obj, property)));
+                }
+                _ => return Err(format!("Unexpected member expression"))
+            }
+        }
+        Ok(obj)
     }
 
     fn ident(&mut self) -> Result<Expression, String> {
@@ -600,7 +1056,8 @@ impl<'a> Parser<'a> {
     fn check_valid_assignment_target(&self, exp: Expression) -> Result<Expression, String> {
         match exp {
             Expression::Ident(_) => Ok(exp),
-            _ => Err(format!("Unexpected expression, expect Ident expression"))
+            Expression::MemberExpression(_) => Ok(exp),
+            _ => Err(format!("Unexpected left-hand side in assignment expression"))
         }
     }
 

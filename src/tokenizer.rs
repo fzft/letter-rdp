@@ -41,9 +41,12 @@ pub enum Token {
 
     OpenBrace,
     CloseBrace,
-
+    OpenSqrBracket,
+    CloseSqrBracket,
     OpenParen,
     CloseParen,
+
+    Dot,
 
     SimpleAssign,
     AddAssign,
@@ -60,6 +63,16 @@ pub enum Token {
     True,
     False,
     Null,
+    While,
+    Do,
+    For,
+    Def,
+    Return,
+    Class,
+    Extend,
+    New,
+    This,
+    Super
 }
 
 
@@ -84,6 +97,8 @@ lazy_static! {
     static ref SPEC: Vec<(&'static str, PatternBox)> = {
         let mut patterns = Vec::<(&'static str, PatternBox)>::new();
         // Float
+
+
         patterns.push(((r"^\d+(\.\d+)?", PatternBox::new(|s: &str| Token::Number(s.to_string())))));
 
         // Keywords
@@ -93,10 +108,21 @@ lazy_static! {
         patterns.push((r"^\btrue\b", PatternBox::new(|_: &str| Token::True)));
         patterns.push((r"^\bfalse\b", PatternBox::new(|_: &str| Token::False)));
         patterns.push((r"^\bnull\b", PatternBox::new(|_: &str| Token::Null)));
+        patterns.push((r"^\bdo\b", PatternBox::new(|_: &str| Token::Do)));
+        patterns.push((r"^\bfor\b", PatternBox::new(|_: &str| Token::For)));
+        patterns.push((r"^\bwhile\b", PatternBox::new(|_: &str| Token::While)));
+        patterns.push((r"^\bdef\b", PatternBox::new(|_: &str| Token::Def)));
+        patterns.push((r"^\breturn\b", PatternBox::new(|_: &str| Token::Return)));
+        patterns.push((r"^\bclass\b", PatternBox::new(|_: &str| Token::Class)));
+        patterns.push((r"^\bsuper\b", PatternBox::new(|_: &str| Token::Super)));
+        patterns.push((r"^\bnew\b", PatternBox::new(|_: &str| Token::New)));
+        patterns.push((r"^\bthis\b", PatternBox::new(|_: &str| Token::This)));
+        patterns.push((r"^\bextend\b", PatternBox::new(|_: &str| Token::Extend)));
+
 
         patterns.push((r"^\+=", PatternBox::new(|_: &str| Token::AddAssign)));
+        patterns.push((r"^\-=", PatternBox::new(|_: &str| Token::MinusAssign)));
         patterns.push((r"^\+", PatternBox::new(|_: &str| Token::Plus)));
-
         patterns.push((r"^&&", PatternBox::new(|_: &str| Token::LogicalAnd)));
         patterns.push((r"^\|\|", PatternBox::new(|_: &str| Token::LogicalOr)));
         patterns.push((r"^!", PatternBox::new(|_: &str| Token::LogicalNot)));
@@ -112,7 +138,10 @@ lazy_static! {
 
         patterns.push((r"^\{", PatternBox::new(|_: &str| Token::OpenBrace)));
         patterns.push((r"^\}", PatternBox::new(|_: &str| Token::CloseBrace)));
+        patterns.push((r"^\[", PatternBox::new(|_: &str| Token::OpenSqrBracket)));
+        patterns.push((r"^\]", PatternBox::new(|_: &str| Token::CloseSqrBracket)));
 
+        patterns.push((r"^\.", PatternBox::new(|_: &str| Token::Dot)));
 
         patterns.push((r"^\(", PatternBox::new(|_: &str| Token::OpenParen)));
         patterns.push((r"^\)", PatternBox::new(|_: &str| Token::CloseParen)));
@@ -121,19 +150,18 @@ lazy_static! {
         patterns.push((r"^,", PatternBox::new(|_: &str| Token::Comma)));
         patterns.push((r"^\-", PatternBox::new(|_: &str| Token::Minus)));
 
-        patterns.push((r">", PatternBox::new(|_: &str| Token::GreaterThan)));
-        patterns.push((r"<", PatternBox::new(|_: &str| Token::LessThan)));
-        patterns.push((r">=", PatternBox::new(|_: &str| Token::GreaterThanOrEqual)));
-        patterns.push((r"<=", PatternBox::new(|_: &str| Token::LessThan)));
-        patterns.push((r"!=", PatternBox::new(|_: &str| Token::NotEqual)));
-        patterns.push((r"==", PatternBox::new(|_: &str| Token::DoubleEqual)));
+        patterns.push((r"^>", PatternBox::new(|_: &str| Token::GreaterThan)));
+        patterns.push((r"^<", PatternBox::new(|_: &str| Token::LessThan)));
+        patterns.push((r"^>=", PatternBox::new(|_: &str| Token::GreaterThanOrEqual)));
+        patterns.push((r"^<=", PatternBox::new(|_: &str| Token::LessThan)));
+        patterns.push((r"^!=", PatternBox::new(|_: &str| Token::NotEqual)));
+        patterns.push((r"^==", PatternBox::new(|_: &str| Token::DoubleEqual)));
 
 
 
 
         // Assign
-        patterns.push((r"\-=", PatternBox::new(|_: &str| Token::MinusAssign)));
-        patterns.push((r"\*=", PatternBox::new(|_: &str| Token::MultiAssign)));
+        patterns.push((r"^\*=", PatternBox::new(|_: &str| Token::MultiAssign)));
         patterns.push((r"^/=", PatternBox::new(|_: &str| Token::DivAssign)));
 
         patterns.push((r"^=", PatternBox::new(|_: &str| Token::SimpleAssign)));
@@ -144,7 +172,7 @@ lazy_static! {
 
 
          // String
-        patterns.push((r#"^"([^"\\]|\\.)*""#, PatternBox::new(|s: &str| {
+        patterns.push((r#"^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')"#, PatternBox::new(|s: &str| {
             Token::StringLiteral(s[1..s.len() - 1].to_string())
         })));
 
@@ -172,13 +200,16 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
+
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         while !self.input.is_empty() {
+
             for (pattern, token_constructor) in SPEC.iter() {
                 if let Some(captures) = Regex::new(pattern).unwrap().captures(self.input) {
+
                     let token_str = captures.get(0).unwrap().as_str();
 
                     // Update the input by removing the matched token
